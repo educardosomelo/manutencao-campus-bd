@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarefas de manutenção - IFMG Campus Bom Despacho</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .dashboard-header {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+        }
+        .status-executando {
+            background-color: #8a2be2; /* Roxo claro */
+            color: #fff;
+        }
+        .status-aprovada {
+            background-color: #ffc107; /* Amarelo */
+            color: #000;
+        }
+        .status-concluida {
+            background-color: #28a745; /* Verde */
+            color: #fff;
+        }
+        .status-pendente {
+            background-color: #00bfff; /* Azul claro */
+            color: #fff;
+        }
+        .text-purple-light {
+            color: #8a2be2;
+        }
+        .metric-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        .metric-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 1rem 0;
+        }
+        .task-item {
+            border-left: 4px solid #000000;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: white;
+            border-radius: 0 10px 10px 0;
+        }
+        .task-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .task-date {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .progress-custom {
+            height: 8px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0"><i class="fas fa-tools me-3"></i>Tarefas de manutenção</h1>
+                    <p class="mb-0 mt-2">IFMG - Campus Bom Despacho</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="text-white-50">
+                        <small>Última atualização: 07/09/2025 17:23</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Métricas Principais -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="card metric-card">
+                    <div class="metric-number text-info" id="pendingBudgetTasks">0</div>
+                    <div class="metric-label">Aguardando Orçamento</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card metric-card">
+                    <div class="metric-number text-warning" id="approvedTasks">0</div>
+                    <div class="metric-label">Aprovadas para Iniciar</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card metric-card">
+                    <div class="metric-number text-purple-light" id="executingTasks">0</div>
+                    <div class="metric-label">Executando</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card metric-card">
+                    <div class="metric-number text-success" id="completedTasks">0</div>
+                    <div class="metric-label">Concluídas</div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- Lista de Tarefas -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Tarefas</h5>
+                        <div class="float-end">
+                            <select class="form-select form-select-sm" id="statusFilter" style="width: auto; display: inline-block;">
+                                <option value="">Todos os Status</option>
+                                <option value="Aguardando orçamento">Aguardando orçamento</option>
+                                <option value="Aprovada para iniciar">Aprovada para iniciar</option>
+                                <option value="Executando">Executando</option>
+                                <option value="Concluída">Concluída</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="tasksList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Dados das tarefas (será carregado do JSON)
+        let tasksData = [];
+
+        // Função para carregar dados
+        async function loadData() {
+            try {
+                const response = await fetch('processed_data.json');
+                tasksData = await response.json();
+                initializeDashboard();
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+                // Dados de exemplo caso não consiga carregar
+                tasksData = [
+                    {
+                        "Tarefa": "Capina e roçagem da área próxima ao Parque Aquático",
+                        "Status": "Concluída",
+                        "% executado": 100,
+                        "Data de início": "2025-08-19T00:00:00.000Z",
+                        "Data de término": "2025-09-05T00:00:00.000Z",
+                        "Observações": "Aguardando medição final para iniciar processo de pagamento"
+                    },
+                    {
+                        "Tarefa": "Revisão/reparo das duas bombas d'água localizadas na Casa de Máquinas",
+                        "Status": "Concluída",
+                        "% executado": 100,
+                        "Data de início": "2025-08-29T00:00:00.000Z",
+                        "Data de término": "2025-09-05T00:00:00.000Z",
+                        "Observações": "A medição final será feita juntamente com as outras bombas"
+                    },
+                    {
+                        "Tarefa": "Manutenção no telhado",
+                        "Status": "Executando",
+                        "% executado": 80,
+                        "Data de início": "2025-08-19T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Manutenção e reinstalação dos climatizadores",
+                        "Status": "Executando",
+                        "% executado": 50,
+                        "Data de início": "2025-09-04T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Equipamentos desmontados, aguardando higienização"
+                    },
+                    {
+                        "Tarefa": "Iluminação da placa externa",
+                        "Status": "Executando",
+                        "% executado": 70,
+                        "Data de início": "2025-09-04T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Aguardando serviço do eletricista"
+                    },
+                    {
+                        "Tarefa": "Reforma das salas de aula e laboratório",
+                        "Status": "Executando",
+                        "% executado": 60,
+                        "Data de início": "2025-08-29T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Aguardando colocação de drywall e serviço de eletricista"
+                    },
+                    {
+                        "Tarefa": "Reforma da sala de apoio a alunos",
+                        "Status": "Executando",
+                        "% executado": 50,
+                        "Data de início": "2025-08-29T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Aguardando pintura das paredes e teto"
+                    },
+                    {
+                        "Tarefa": "Troca das lâmpadas do hall de entrada do prédio principal para LED",
+                        "Status": "Executando",
+                        "% executado": 40,
+                        "Data de início": "2025-08-29T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Lâmpadas antigas retiradas, aguardando chegada das novas"
+                    },
+                    {
+                        "Tarefa": "Instalação de ventiladores de parede no auditório ",
+                        "Status": "Executando",
+                        "% executado": 90,
+                        "Data de início": "2025-08-19T00:00:00.000Z",
+                        "Data de término": null,
+                        "Observações": "Aguardando a instalação do último ventilador comprado"
+                    },
+                    {
+                        "Tarefa": "Manutenção da rede hidrosanitária (prédio principal, quiosque, vestiários, alojamentos, etc)",
+                        "Status": "Aprovada para iniciar",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "Inclui o reparo das duas válvulas danificadas no reservatório subterrâneo"
+                    },
+                    {
+                        "Tarefa": "Remoção das árvores próximas às quadras",
+                        "Status": "Aprovada para iniciar",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "Liberação da Prefeitura Municipal em 04/09/2025."
+                    },
+                    {
+                        "Tarefa": "Instalação de registro de água no prédio ocupado pelo SAMU",
+                        "Status": "Aprovada para iniciar",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Reparo da bomba d'água (motor) localizada embaixo do reservatório elevado",
+                        "Status": "Aprovada para iniciar",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Reparo nas bombas d'água do Parque Aquático (vazamentos)",
+                        "Status": "Aprovada para iniciar",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Isolamento dos chalés com telas de alambrado e portões / Reforma de quinze chalés (água/esgoto/elétrica)",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "Inclui a revisão dos cinco chalés que foram reformados no início do ano"
+                    },
+                    {
+                        "Tarefa": "Capina e roçagem da área dos chalés",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Instalação de divisórias e porta na sala ao lado do elevador (primeira andar)",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Instalação de divisórias e forro no segundo andar, formando duas salas (duas portas), ao lado das atuais divisórias",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Quebra do teto embaixo do banheiro adaptado do segundo andar (acesso pela UBS) e análise de custo para reparo",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Levantamento de reparos na tubulação/galerias de esgoto",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Troca dos refletores das quadras, piscinas, auditório e da área externa do prédio principal para LED",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Revisão elétrica e troca de lâmpadas das luminárias da área externa do prédio principal",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Reparo e impermeabilização da caixa d'água elevada",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Reparo e pintura nas quadras que não foram objeto de manutenção em janeiro de 2025",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Pintura da fachada do prédio principal (incluindo janelas e grades externas)",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Pintura do piso na frente do prédio principal e em determinados pontos em volta dele",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    },
+                    {
+                        "Tarefa": "Reparo nos passeios em volta do prédio principal",
+                        "Status": "Aguardando orçamento",
+                        "% executado": 0,
+                        "Data de início": null,
+                        "Data de término": null,
+                        "Observações": "N/A"
+                    }
+                ];
+                initializeDashboard();
+            }
+        }
+
+        // Função para inicializar o dashboard
+        function initializeDashboard() {
+            updateMetrics();
+            renderTasksList();
+            setupFilters();
+        }
+
+        // Atualizar métricas
+        function updateMetrics() {
+            const pendingBudget = tasksData.filter(task => task.Status === 'Aguardando orçamento').length;
+            const approved = tasksData.filter(task => task.Status === 'Aprovada para iniciar').length;
+            const executing = tasksData.filter(task => task.Status === 'Executando').length;
+            const completed = tasksData.filter(task => task.Status === 'Concluída').length;
+
+            document.getElementById('pendingBudgetTasks').textContent = pendingBudget;
+            document.getElementById('approvedTasks').textContent = approved;
+            document.getElementById('executingTasks').textContent = executing;
+            document.getElementById('completedTasks').textContent = completed;
+        }
+
+        // Criar gráfico de status
+        function createStatusChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            const statusCounts = {};
+            tasksData.forEach(task => {
+                statusCounts[task.Status] = (statusCounts[task.Status] || 0) + 1;
+            });
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: [
+                            '#ffc107',
+                            '#28a745',
+                            '#17a2b8',
+                            '#dc3545'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Criar gráfico de cronograma
+        function createTimelineChart() {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            
+            const monthCounts = {};
+            tasksData.forEach(task => {
+                if (task['Data de início']) {
+                    const date = new Date(task['Data de início']);
+                    const monthYear = date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                    monthCounts[monthYear] = (monthCounts[monthYear] || 0) + 1;
+                }
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(monthCounts),
+                    datasets: [{
+                        label: 'Tarefas Iniciadas',
+                        data: Object.values(monthCounts),
+                        backgroundColor: '#28a745',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Renderizar lista de tarefas
+        function renderTasksList(filterStatus = '') {
+            const tasksList = document.getElementById('tasksList');
+            const filteredTasks = filterStatus ? 
+                tasksData.filter(task => task.Status === filterStatus) : 
+                tasksData;
+
+            tasksList.innerHTML = filteredTasks.map(task => {
+                const statusClass = getStatusClass(task.Status);
+                const startDate = task['Data de início'] ? 
+                    new Date(task['Data de início']).toLocaleDateString('pt-BR') : 
+                    'Não definida';
+                
+                return `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="task-item">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="task-title">${task.Tarefa}</div>
+                                    <span class="status-badge ${statusClass}">${task.Status}</span>
+                                </div>
+                                <div class="task-date mb-2">
+                                    <i class="fas fa-calendar me-1"></i>Início: ${startDate}
+                                </div>
+
+                                ${task["Data de término"] && task["Data de término"] !== null && task["Data de término"] !== "" ? `
+                                    <div class="task-date mb-2">
+                                        <i class="fas fa-calendar me-1"></i>Término: ${new Date(task["Data de término"]).toLocaleDateString("pt-BR")}
+                                    </div>
+                                ` : ``}
+
+                                ${task.Observações !== 'N/A' ? `
+                                    <div class="text-muted small">
+                                        <i class="fas fa-comment me-1"></i>${task.Observações}
+                                    </div>
+                                ` : ''}
+                                <div class="progress progress-custom mt-2">
+                                    <div class="progress-bar" role="progressbar" style="width: ${task["% executado"]}%; background-color: #28a745;" aria-valuenow="${task["% executado"]}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <small class="text-muted">${task['% executado']}% concluído</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Obter classe CSS para status
+        function getStatusClass(status) {
+            switch (status) {
+                case 'Aguardando orçamento': return 'status-pendente'; // Azul claro
+                case 'Aprovada para iniciar': return 'status-aprovada'; // Amarelo
+                case 'Executando': return 'status-executando'; // Roxo claro
+                case 'Concluída': return 'status-concluida'; // Verde
+                default: return 'status-pendente';
+            }
+        }
+
+        // Configurar filtros
+        function setupFilters() {
+            document.getElementById('statusFilter').addEventListener('change', function() {
+                renderTasksList(this.value);
+            });
+        }
+
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
+
